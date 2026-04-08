@@ -46,12 +46,28 @@ pub fn default_output_root() -> PathBuf {
     }
 }
 
+pub fn external_workspace_root() -> Option<PathBuf> {
+    let crate_root = project_root();
+    let parent = crate_root.parent()?;
+    if parent.join("Data").is_dir()
+        || parent.join("Bots").is_dir()
+        || parent.join("Analysis").is_dir()
+    {
+        return Some(parent.to_path_buf());
+    }
+    None
+}
+
 pub fn project_root() -> PathBuf {
     static PROJECT_ROOT: OnceLock<PathBuf> = OnceLock::new();
     PROJECT_ROOT.get_or_init(resolve_project_root).clone()
 }
 
 pub fn workspace_root() -> PathBuf {
+    if let Some(external_root) = external_workspace_root() {
+        return external_root;
+    }
+
     let crate_root = project_root();
     if crate_root.join("datasets").is_dir()
         || crate_root.join("traders").is_dir()

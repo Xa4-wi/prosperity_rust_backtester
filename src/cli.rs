@@ -13,7 +13,9 @@ use crate::model::{
     MatchingConfig, MetadataOverrides, NormalizedDataset, RunRequest, load_dataset,
     materialize_submission_json_if_missing,
 };
-use crate::runner::{default_output_root, display_path, project_root, run_backtest};
+use crate::runner::{
+    default_output_root, display_path, external_workspace_root, project_root, run_backtest,
+};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -674,7 +676,8 @@ fn resolve_trader(requested: Option<&Path>) -> Result<ResolvedTrader> {
 }
 
 fn resolve_dataset_input(requested: Option<&str>) -> Result<ResolvedDataset> {
-    resolve_dataset_input_with_root(requested, &project_root().join("datasets"))
+    let datasets_root = preferred_datasets_root();
+    resolve_dataset_input_with_root(requested, &datasets_root)
 }
 
 fn resolve_dataset_input_with_root(
@@ -683,8 +686,14 @@ fn resolve_dataset_input_with_root(
 ) -> Result<ResolvedDataset> {
     let requested = requested.unwrap_or("latest");
     let normalized = requested.to_ascii_lowercase();
+    let using_workspace_data = is_workspace_data_root(datasets_root);
 
     if let Some(round_name) = normalized.strip_suffix("-submission") {
+        if using_workspace_data {
+            bail!(
+                "submission dataset alias is not available for workspace Data/; pass a submission.log path explicitly"
+            );
+        }
         let round_root = round_root_for_name(datasets_root, round_name)?;
         return Ok(ResolvedDataset {
             roots: vec![round_submission_entry(&round_root)?],
@@ -696,6 +705,14 @@ fn resolve_dataset_input_with_root(
 
     let resolved = match normalized.as_str() {
         "latest" => {
+            if using_workspace_data {
+                return Ok(ResolvedDataset {
+                    roots: vec![datasets_root.to_path_buf()],
+                    label: "workspace-data".to_string(),
+                    auto_selected: true,
+                    exclude_submission_when_day_filtered: true,
+                });
+            }
             let latest_round = latest_round_root(datasets_root)?;
             ResolvedDataset {
                 roots: vec![latest_round.clone()],
@@ -704,12 +721,23 @@ fn resolve_dataset_input_with_root(
                 exclude_submission_when_day_filtered: true,
             }
         }
-        "tutorial" | "tut" | "tutorial-round" | "tut-round" => ResolvedDataset {
-            roots: vec![datasets_root.join("tutorial")],
-            label: "tutorial".to_string(),
-            auto_selected: false,
-            exclude_submission_when_day_filtered: true,
-        },
+        "tutorial" | "tut" | "tutorial-round" | "tut-round" => {
+            if using_workspace_data {
+                ResolvedDataset {
+                    roots: vec![datasets_root.to_path_buf()],
+                    label: "workspace-data".to_string(),
+                    auto_selected: false,
+                    exclude_submission_when_day_filtered: true,
+                }
+            } else {
+                ResolvedDataset {
+                    roots: vec![datasets_root.join("tutorial")],
+                    label: "tutorial".to_string(),
+                    auto_selected: false,
+                    exclude_submission_when_day_filtered: true,
+                }
+            }
+        }
         "round1" | "r1" => round_dataset(datasets_root, "round1")?,
         "round2" | "r2" => round_dataset(datasets_root, "round2")?,
         "round3" | "r3" => round_dataset(datasets_root, "round3")?,
@@ -719,6 +747,11 @@ fn resolve_dataset_input_with_root(
         "round7" | "r7" => round_dataset(datasets_root, "round7")?,
         "round8" | "r8" => round_dataset(datasets_root, "round8")?,
         "submission" | "tutorial-submission" | "tut-sub" | "sub" => {
+            if using_workspace_data {
+                bail!(
+                    "submission dataset alias is not available for workspace Data/; pass a submission.log path explicitly"
+                );
+            }
             let latest_round = latest_round_root(datasets_root)?;
             ResolvedDataset {
                 roots: vec![round_submission_entry(&latest_round)?],
@@ -727,18 +760,43 @@ fn resolve_dataset_input_with_root(
                 exclude_submission_when_day_filtered: false,
             }
         }
-        "tutorial-1" | "tut-1" | "tut-d-1" => ResolvedDataset {
-            roots: vec![round_day_entry(&datasets_root.join("tutorial"), -1)?],
-            label: "tut-d-1".to_string(),
-            auto_selected: false,
-            exclude_submission_when_day_filtered: false,
-        },
-        "tutorial-2" | "tut-2" | "tut-d-2" => ResolvedDataset {
-            roots: vec![round_day_entry(&datasets_root.join("tutorial"), -2)?],
-            label: "tut-d-2".to_string(),
-            auto_selected: false,
-            exclude_submission_when_day_filtered: false,
-        },
+        "tutorial-1" | "tut-1" | "tut-d-1" => {
+            let round_root = if using_workspace_data {
+                datasets_root.to_path_buf()
+            } else {
+                datasets_root.join("tutorial")
+            };
+            ResolvedDataset {
+                roots: vec![round_day_entry(&round_root, -1)?],
+                label: "tut-d-1".to_string(),
+                auto_selected: false,
+                exclude_submission_when_day_filtered: false,
+            }
+        }
+        "tutorial-2" | "tut-2" | "tut-d-2" => {
+            let round_root = if using_workspace_data {
+                datasets_root.to_path_buf()
+            } else {
+                datasets_root.join("tutorial")
+            };
+            ResolvedDataset {
+                roots: vec![round_day_entry(&round_root, -2)?],
+                label: "tut-d-2".to_string(),
+                auto_selected: false,
+                exclude_submission_when_day_filtered: false,
+            }
+        }
+        "workspace" | "prosperity" | "repo" => {
+            let workspace_data_root = preferred_workspace_data_root().with_context(|| {
+                "workspace Data/ directory was not found next to ProsperityRustBacktester"
+            })?;
+            ResolvedDataset {
+                roots: vec![workspace_data_root],
+                label: "workspace-data".to_string(),
+                auto_selected: false,
+                exclude_submission_when_day_filtered: true,
+            }
+        }
         _ => {
             let path = PathBuf::from(requested);
             let canonical = path
@@ -868,6 +926,15 @@ fn candidate_trader_roots() -> Result<Vec<PathBuf>> {
     let project = project_root();
     let mut roots = Vec::new();
 
+    if let Some(workspace_root) = external_workspace_root() {
+        for relative in ["Bots", "Bots/archive"] {
+            let candidate = workspace_root.join(relative);
+            if candidate.is_dir() && !roots.iter().any(|existing| existing == &candidate) {
+                roots.push(candidate);
+            }
+        }
+    }
+
     for base in [project] {
         for relative in ["scripts", "traders/submissions", "traders"] {
             let candidate = base.join(relative);
@@ -878,6 +945,22 @@ fn candidate_trader_roots() -> Result<Vec<PathBuf>> {
     }
 
     Ok(roots)
+}
+
+fn preferred_workspace_data_root() -> Option<PathBuf> {
+    external_workspace_root()
+        .map(|root| root.join("Data"))
+        .filter(|path| path.is_dir())
+}
+
+fn preferred_datasets_root() -> PathBuf {
+    preferred_workspace_data_root().unwrap_or_else(|| project_root().join("datasets"))
+}
+
+fn is_workspace_data_root(path: &Path) -> bool {
+    preferred_workspace_data_root()
+        .as_deref()
+        .is_some_and(|candidate| candidate == path)
 }
 
 fn collect_trader_candidates(root: &Path) -> Result<Vec<PathBuf>> {

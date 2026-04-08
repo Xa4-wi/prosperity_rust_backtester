@@ -8,6 +8,26 @@ Everything needed for the default backtest flow now lives inside this directory.
 
 - `traders/latest_trader.py`
 
+## Workspace Integration
+
+This copy has been integrated into the surrounding Prosperity workspace.
+
+When `ProsperityRustBacktester` lives inside the main repo, it now:
+
+- auto-discovers trader files from `../Bots/` and `../Bots/archive/`
+- prefers the parent repo `../Data/` directory as the default dataset source
+- still falls back to the bundled `datasets/` and `traders/` folders when the parent workspace is not present
+
+That means these commands are now intended to work from this repo copy:
+
+```bash
+rust_backtester
+```
+
+```bash
+rust_backtester --trader ../Bots/Traderv9.py --dataset workspace --day -1
+```
+
 ## Setup
 
 Clone the repo:
@@ -93,8 +113,8 @@ rust_backtester
 
 With no arguments it will:
 
-- auto-pick the newest Python file that looks like a trader from this repo's local `scripts/`, `traders/submissions/`, or `traders/`
-- default the dataset to the latest populated round folder under `datasets/`
+- auto-pick the newest Python file that looks like a trader from the integrated workspace `../Bots/` first, then from this repo's local `scripts/`, `traders/submissions/`, or `traders/`
+- default the dataset to the parent workspace `../Data/` when available, otherwise the latest populated round folder under `datasets/`
 - run in fast mode
 - print one compact row per day
 
@@ -159,6 +179,13 @@ rust_backtester \
 rust_backtester \
   --trader /path/to/trader.py \
   --dataset /path/to/submission.log
+```
+
+```bash
+rust_backtester \
+  --trader ../Bots/Traderv10.py \
+  --dataset workspace \
+  --day -1
 ```
 
 ```bash
