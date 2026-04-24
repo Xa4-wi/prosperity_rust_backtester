@@ -60,13 +60,13 @@ or just run the backtester directly:
 make backtest
 ```
 
-The macOS `make` targets intentionally build through a wrapper instead of your full shell environment. By default they write Rust build artifacts to:
+The macOS `make` targets intentionally build through a wrapper instead of your full shell environment. In this workspace-integrated copy they default to the repo-local target directory:
 
 ```bash
-~/Library/Caches/rust_backtester/target
+target_local/
 ```
 
-If you want a different target dir, override it explicitly:
+That keeps builds self-contained inside the project and avoids home-cache path issues. If you want a different target dir, override it explicitly:
 
 ```bash
 CARGO_TARGET_DIR=/path/to/target make build-release

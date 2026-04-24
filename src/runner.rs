@@ -572,6 +572,18 @@ fn position_limit(symbol: &str) -> i64 {
         "VOLCANIC_ROCK_VOUCHER_10250" => 200,
         "VOLCANIC_ROCK_VOUCHER_10500" => 200,
         "MAGNIFICENT_MACARONS" => 75,
+        "HYDROGEL_PACK" => 200,
+        "VELVETFRUIT_EXTRACT" => 200,
+        "VEV_4000" => 300,
+        "VEV_4500" => 300,
+        "VEV_5000" => 300,
+        "VEV_5100" => 300,
+        "VEV_5200" => 300,
+        "VEV_5300" => 300,
+        "VEV_5400" => 300,
+        "VEV_5500" => 300,
+        "VEV_6000" => 300,
+        "VEV_6500" => 300,
         _ => DEFAULT_POSITION_LIMIT,
     }
 }
@@ -1287,8 +1299,8 @@ fn indexmap_f64_to_json(values: &IndexMap<String, f64>) -> Result<IndexMap<Strin
 mod tests {
     use super::{
         BookLevel, display_path, eligible_trade_price, enforce_position_limits,
-        market_trade_duplicates_touch, match_orders_for_symbol, project_root, run_backtest,
-        python_round_to_digits, python_round_to_i64, queue_penetration_available,
+        market_trade_duplicates_touch, match_orders_for_symbol, project_root,
+        python_round_to_digits, python_round_to_i64, queue_penetration_available, run_backtest,
         slippage_adjusted_price,
     };
     use crate::model::{
@@ -1411,10 +1423,8 @@ mod tests {
 
     #[test]
     fn product_specific_limits_allow_positions_up_to_cap() {
-        let position = IndexMap::from([
-            ("EMERALDS".to_string(), 75),
-            ("TOMATOES".to_string(), -75),
-        ]);
+        let position =
+            IndexMap::from([("EMERALDS".to_string(), 75), ("TOMATOES".to_string(), -75)]);
         let orders_by_symbol = IndexMap::from([
             (
                 "EMERALDS".to_string(),
@@ -1443,10 +1453,8 @@ mod tests {
 
     #[test]
     fn product_specific_limits_reject_orders_beyond_cap() {
-        let position = IndexMap::from([
-            ("EMERALDS".to_string(), 75),
-            ("TOMATOES".to_string(), -75),
-        ]);
+        let position =
+            IndexMap::from([("EMERALDS".to_string(), 75), ("TOMATOES".to_string(), -75)]);
         let orders_by_symbol = IndexMap::from([
             (
                 "EMERALDS".to_string(),
@@ -1474,6 +1482,81 @@ mod tests {
         assert!(messages[0].contains("80"));
         assert!(messages[1].contains("TOMATOES"));
         assert!(messages[1].contains("80"));
+    }
+
+    #[test]
+    fn round3_products_use_round_limits() {
+        let position = IndexMap::from([
+            ("HYDROGEL_PACK".to_string(), 199),
+            ("VELVETFRUIT_EXTRACT".to_string(), -199),
+            ("VEV_5200".to_string(), 299),
+        ]);
+        let allowed_orders = IndexMap::from([
+            (
+                "HYDROGEL_PACK".to_string(),
+                vec![Order {
+                    symbol: "HYDROGEL_PACK".to_string(),
+                    price: 10_000,
+                    quantity: 1,
+                }],
+            ),
+            (
+                "VELVETFRUIT_EXTRACT".to_string(),
+                vec![Order {
+                    symbol: "VELVETFRUIT_EXTRACT".to_string(),
+                    price: 5_250,
+                    quantity: -1,
+                }],
+            ),
+            (
+                "VEV_5200".to_string(),
+                vec![Order {
+                    symbol: "VEV_5200".to_string(),
+                    price: 100,
+                    quantity: 1,
+                }],
+            ),
+        ]);
+
+        let (filtered, messages) = enforce_position_limits(&position, allowed_orders);
+
+        assert!(messages.is_empty());
+        assert_eq!(filtered.len(), 3);
+
+        let rejected_orders = IndexMap::from([
+            (
+                "HYDROGEL_PACK".to_string(),
+                vec![Order {
+                    symbol: "HYDROGEL_PACK".to_string(),
+                    price: 10_000,
+                    quantity: 2,
+                }],
+            ),
+            (
+                "VELVETFRUIT_EXTRACT".to_string(),
+                vec![Order {
+                    symbol: "VELVETFRUIT_EXTRACT".to_string(),
+                    price: 5_250,
+                    quantity: -2,
+                }],
+            ),
+            (
+                "VEV_5200".to_string(),
+                vec![Order {
+                    symbol: "VEV_5200".to_string(),
+                    price: 100,
+                    quantity: 2,
+                }],
+            ),
+        ]);
+
+        let (filtered, messages) = enforce_position_limits(&position, rejected_orders);
+
+        assert!(filtered.is_empty());
+        assert_eq!(messages.len(), 3);
+        assert!(messages[0].contains("200"));
+        assert!(messages[1].contains("200"));
+        assert!(messages[2].contains("300"));
     }
 
     #[test]

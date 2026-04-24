@@ -110,11 +110,7 @@ pub fn run() -> Result<()> {
                     output.run_dir.display()
                 )
             })?;
-            format!(
-                "{}/{}-*",
-                display_path(flat_dir),
-                plan.artifact_prefix
-            )
+            format!("{}/{}-*", display_path(flat_dir), plan.artifact_prefix)
         } else {
             display_path(&output.run_dir)
         };
@@ -309,7 +305,10 @@ fn build_run_plan(
     Ok((run_id_seed, plans))
 }
 
-fn build_standard_plans(targets: Vec<(PathBuf, Option<i64>)>, run_id_seed: &str) -> Vec<PlannedRun> {
+fn build_standard_plans(
+    targets: Vec<(PathBuf, Option<i64>)>,
+    run_id_seed: &str,
+) -> Vec<PlannedRun> {
     let multiple_runs = targets.len() > 1;
     targets
         .into_iter()
@@ -366,7 +365,9 @@ fn flush_carry_buffer(
     }
 
     if carry_buffer.len() == 1 {
-        let (dataset_file, day) = carry_buffer.pop().expect("carry buffer should have one item");
+        let (dataset_file, day) = carry_buffer
+            .pop()
+            .expect("carry buffer should have one item");
         plans.push(PlannedRun {
             metadata_overrides: Default::default(),
             ..build_single_plan(dataset_file, day, "", false)
@@ -463,7 +464,8 @@ fn carry_recorded_dataset_path(targets: &[(PathBuf, Option<i64>)]) -> String {
 
 fn carry_dataset_id(targets: &[(PathBuf, Option<i64>)]) -> String {
     let first_path = &targets[0].0;
-    let base = dataset_container_label(first_path).unwrap_or_else(|| dataset_stem_label(first_path));
+    let base =
+        dataset_container_label(first_path).unwrap_or_else(|| dataset_stem_label(first_path));
     sanitize_identifier(&format!("{base}-carry"))
 }
 
@@ -787,9 +789,9 @@ fn resolve_dataset_input_with_root(
             }
         }
         "workspace" | "prosperity" | "repo" => {
-            let workspace_data_root = preferred_workspace_data_root().with_context(|| {
-                "workspace Data/ directory was not found next to ProsperityRustBacktester"
-            })?;
+            let workspace_data_root = preferred_workspace_data_root().with_context(
+                || "workspace Data/ directory was not found next to ProsperityRustBacktester",
+            )?;
             ResolvedDataset {
                 roots: vec![workspace_data_root],
                 label: "workspace-data".to_string(),
@@ -1321,15 +1323,27 @@ fn render_day(day: Option<i64>) -> String {
 
 fn reset_flat_output_dir(flat_dir: &Path) -> Result<()> {
     if flat_dir.is_dir() {
-        fs::remove_dir_all(flat_dir)
-            .with_context(|| format!("failed to replace flat output directory {}", flat_dir.display()))?;
+        fs::remove_dir_all(flat_dir).with_context(|| {
+            format!(
+                "failed to replace flat output directory {}",
+                flat_dir.display()
+            )
+        })?;
     }
-    fs::create_dir_all(flat_dir)
-        .with_context(|| format!("failed to create flat output directory {}", flat_dir.display()))?;
+    fs::create_dir_all(flat_dir).with_context(|| {
+        format!(
+            "failed to create flat output directory {}",
+            flat_dir.display()
+        )
+    })?;
     Ok(())
 }
 
-fn write_flat_run_artifacts(flat_dir: &Path, prefix: &str, output: &crate::model::RunOutput) -> Result<()> {
+fn write_flat_run_artifacts(
+    flat_dir: &Path,
+    prefix: &str,
+    output: &crate::model::RunOutput,
+) -> Result<()> {
     let artifacts = output
         .artifacts
         .as_ref()
@@ -1337,7 +1351,12 @@ fn write_flat_run_artifacts(flat_dir: &Path, prefix: &str, output: &crate::model
 
     write_prefixed_artifact(flat_dir, prefix, "metrics.json", &artifacts.metrics_json)?;
     write_prefixed_artifact(flat_dir, prefix, "bundle.json", &artifacts.bundle_json)?;
-    write_prefixed_artifact(flat_dir, prefix, "submission.log", &artifacts.submission_log)?;
+    write_prefixed_artifact(
+        flat_dir,
+        prefix,
+        "submission.log",
+        &artifacts.submission_log,
+    )?;
     write_prefixed_artifact(flat_dir, prefix, "activity.csv", &artifacts.activity_csv)?;
     write_prefixed_artifact(
         flat_dir,
@@ -1350,7 +1369,12 @@ fn write_flat_run_artifacts(flat_dir: &Path, prefix: &str, output: &crate::model
     Ok(())
 }
 
-fn write_prefixed_artifact(flat_dir: &Path, prefix: &str, file_name: &str, bytes: &[u8]) -> Result<()> {
+fn write_prefixed_artifact(
+    flat_dir: &Path,
+    prefix: &str,
+    file_name: &str,
+    bytes: &[u8],
+) -> Result<()> {
     if bytes.is_empty() {
         return Ok(());
     }
@@ -1628,10 +1652,16 @@ fn build_product_matrix(rows: &[SummaryRow], mode: ProductDisplayMode) -> Produc
 
     let matrix_rows = match mode {
         ProductDisplayMode::Off => Vec::new(),
-        ProductDisplayMode::Full => ranked
-            .into_iter()
-            .map(|(product, values, _)| ProductMatrixRow { product, values })
-            .collect(),
+        ProductDisplayMode::Full => {
+            let mut ordered = ranked.clone();
+            ordered.sort_by(|(left_name, _, _), (right_name, _, _)| {
+                product_display_order(left_name).cmp(&product_display_order(right_name))
+            });
+            ordered
+                .into_iter()
+                .map(|(product, values, _)| ProductMatrixRow { product, values })
+                .collect()
+        }
         ProductDisplayMode::Summary => {
             let shown_count = ranked.len().min(6);
             let mut out: Vec<ProductMatrixRow> = ranked
@@ -1663,6 +1693,23 @@ fn build_product_matrix(rows: &[SummaryRow], mode: ProductDisplayMode) -> Produc
         columns,
         rows: matrix_rows,
     }
+}
+
+fn product_display_order(product: &str) -> (usize, u32, String) {
+    match product {
+        "HYDROGEL_PACK" => (0, 0, product.to_string()),
+        "VELVETFRUIT_EXTRACT" => (1, 0, product.to_string()),
+        _ => voucher_strike(product)
+            .map(|strike| (2, strike, product.to_string()))
+            .unwrap_or_else(|| (1_000, 0, product.to_string())),
+    }
+}
+
+fn voucher_strike(product: &str) -> Option<u32> {
+    product
+        .strip_prefix("VEV_")
+        .or_else(|| product.strip_prefix("VEV"))
+        .and_then(|strike| strike.parse().ok())
 }
 
 fn product_column_label(row: &SummaryRow) -> String {
@@ -1805,6 +1852,58 @@ mod tests {
             build_product_matrix(&[row], ProductDisplayMode::Off)
                 .rows
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn product_matrix_full_keeps_round3_strip_order() {
+        let row = SummaryRow {
+            dataset: "D0".to_string(),
+            day: Some(0),
+            tick_count: 0,
+            own_trade_count: 0,
+            final_pnl_total: 78.0,
+            final_pnl_by_product: {
+                let mut values = IndexMap::new();
+                values.insert("VEV_6500".to_string(), 12.0);
+                values.insert("VEV_6000".to_string(), 11.0);
+                values.insert("VEV_5500".to_string(), 10.0);
+                values.insert("VEV_5400".to_string(), 9.0);
+                values.insert("VEV_5300".to_string(), 8.0);
+                values.insert("VEV_5200".to_string(), 7.0);
+                values.insert("VEV_5100".to_string(), 6.0);
+                values.insert("VEV_5000".to_string(), 5.0);
+                values.insert("VEV_4500".to_string(), 4.0);
+                values.insert("VEV_4000".to_string(), 3.0);
+                values.insert("VELVETFRUIT_EXTRACT".to_string(), 2.0);
+                values.insert("HYDROGEL_PACK".to_string(), 1.0);
+                values
+            },
+            run_dir: None,
+        };
+
+        let matrix = build_product_matrix(&[row], ProductDisplayMode::Full);
+
+        assert_eq!(
+            matrix
+                .rows
+                .iter()
+                .map(|row| row.product.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "HYDROGEL_PACK",
+                "VELVETFRUIT_EXTRACT",
+                "VEV_4000",
+                "VEV_4500",
+                "VEV_5000",
+                "VEV_5100",
+                "VEV_5200",
+                "VEV_5300",
+                "VEV_5400",
+                "VEV_5500",
+                "VEV_6000",
+                "VEV_6500",
+            ]
         );
     }
 

@@ -10,6 +10,13 @@ effective_target_dir() {
         return
     fi
 
+    script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+    repo_root="$(CDPATH= cd -- "${script_dir}/.." && pwd)"
+    if [ -d "${repo_root}" ]; then
+        printf '%s\n' "${repo_root}/target_local"
+        return
+    fi
+
     case "${os_name}" in
         Darwin) printf '%s\n' "${HOME}/Library/Caches/rust_backtester/target" ;;
         *) printf '\n' ;;
