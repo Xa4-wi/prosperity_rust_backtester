@@ -6,20 +6,20 @@ This file tracks local changes made to the upstream `prosperity_rust_backtester`
 
 ### Workspace Integration
 
-- Added workspace-aware root detection in [src/runner.rs](/Users/xavierwinkelmann/Prosperity/ProsperityRustBacktester/src/runner.rs).
+- Added workspace-aware root detection in [src/runner.rs](ProsperityRustBacktester/src/runner.rs).
 - The backtester now prefers the parent Prosperity repo root when it finds directories such as `Data/`, `Bots/`, or `Analysis/`.
 - This makes Python trader imports work more naturally for bots stored outside the Rust backtester directory.
 
 ### Trader Discovery
 
-- Updated [src/cli.rs](/Users/xavierwinkelmann/Prosperity/ProsperityRustBacktester/src/cli.rs) so automatic trader discovery checks:
+- Updated [src/cli.rs](ProsperityRustBacktester/src/cli.rs) so automatic trader discovery checks:
   - `../Bots/`
   - `../Bots/archive/`
   - then the original local `scripts/`, `traders/submissions/`, and `traders/`
 
 ### Dataset Discovery
 
-- Updated [src/cli.rs](/Users/xavierwinkelmann/Prosperity/ProsperityRustBacktester/src/cli.rs) so the default dataset source prefers the parent workspace `../Data/` directory when present.
+- Updated [src/cli.rs](ProsperityRustBacktester/src/cli.rs) so the default dataset source prefers the parent workspace `../Data/` directory when present.
 - Added workspace dataset aliases:
   - `workspace`
   - `prosperity`
@@ -29,7 +29,7 @@ This file tracks local changes made to the upstream `prosperity_rust_backtester`
 
 ### Documentation
 
-- Updated [README.md](/Users/xavierwinkelmann/Prosperity/ProsperityRustBacktester/README.md) with workspace-specific behavior and example commands.
+- Updated [README.md](ProsperityRustBacktester/README.md) with workspace-specific behavior and example commands.
 
 ### Notes
 
